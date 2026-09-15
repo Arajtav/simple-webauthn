@@ -1,3 +1,6 @@
+use bytes::Buf;
+use coset::AsCborValue;
+use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::ser::SerializeStruct;
@@ -5,22 +8,24 @@ use serde_with::base64::Base64;
 use serde_with::base64::UrlSafe;
 use serde_with::formats::Unpadded;
 use serde_with::serde_as;
+use sha2::Digest;
+use thiserror::Error;
 
 #[serde_as]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistrationRequest {
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub challenge: Vec<u8>,
-    pub rp: Rp,
-    pub user: User,
-    pub timeout: i32,
-    pub attestation: Attestation,
-    pub hints: Vec<Hint>,
-    pub pub_key_cred_params: Vec<PubKeyCredParam>,
-    pub exclude_credentials: Vec<ExcludeCredential>,
-    pub authenticator_selection: AuthenticatorSelection,
-    pub extensions: Vec<Extension>,
+    challenge: Vec<u8>,
+    rp: Rp,
+    user: User,
+    timeout: i32,
+    attestation: Attestation,
+    hints: Vec<Hint>,
+    pub_key_cred_params: Vec<PubKeyCredParam>,
+    exclude_credentials: Vec<ExcludeCredential>,
+    authenticator_selection: AuthenticatorSelection,
+    extensions: Vec<Extension>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,28 +46,28 @@ pub struct User {
 
 // TODO
 #[derive(Debug, Serialize)]
-pub enum Attestation {
+enum Attestation {
     None,
 }
 
 #[derive(Debug, Serialize)]
-pub struct Hint {}
+struct Hint {}
 
 #[derive(Debug, Serialize)]
-pub struct PubKeyCredParam {
+struct PubKeyCredParam {
     #[serde(rename = "type")]
-    pub key_type: KeyType,
-    pub alg: Algorithm,
+    key_type: KeyType,
+    alg: Algorithm,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum KeyType {
+enum KeyType {
     PublicKey,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Algorithm {
+enum Algorithm {
     ES256 = -7,
     EdDSA = -8,
     RS256 = -257,
@@ -91,17 +96,17 @@ impl<'de> Deserialize<'de> for Algorithm {
 
 #[serde_as]
 #[derive(Debug, Serialize)]
-pub struct ExcludeCredential {
+struct ExcludeCredential {
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub id: Vec<u8>,
+    id: Vec<u8>,
     #[serde(rename = "type")]
-    pub key_type: KeyType,
-    pub transport: Vec<Transport>,
+    key_type: KeyType,
+    transport: Vec<Transport>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Transport {
+enum Transport {
     Internal,
     Usb,
     Nfc,
@@ -111,10 +116,10 @@ pub enum Transport {
 }
 
 #[derive(Debug)]
-pub struct AuthenticatorSelection {
-    pub authenticator_attachment: Option<AuthenticatorAttachment>,
-    pub resident_key: Requirement,
-    pub user_verification: Requirement,
+struct AuthenticatorSelection {
+    authenticator_attachment: Option<AuthenticatorAttachment>,
+    resident_key: Requirement,
+    user_verification: Requirement,
 }
 
 impl Serialize for AuthenticatorSelection {
@@ -137,9 +142,9 @@ impl Serialize for AuthenticatorSelection {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
-pub enum Requirement {
+enum Requirement {
     Required,
     Preferred,
     Discouraged,
@@ -147,28 +152,28 @@ pub enum Requirement {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum AuthenticatorAttachment {
+enum AuthenticatorAttachment {
     Platform,
     CrossPlatform,
 }
 
 // Not doing that yet
 #[derive(Debug, Serialize)]
-pub struct Extension {}
+struct Extension {}
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistrationResponse {
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub id: Vec<u8>,
+    id: Vec<u8>,
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub raw_id: Vec<u8>,
-    pub response: RegistrationResponseInner,
+    raw_id: Vec<u8>,
+    response: RegistrationResponseInner,
     #[serde(rename = "type")]
-    pub key_type: KeyType,
-    pub client_extension_results: ExtensionResults,
-    pub authenticator_attachment: AuthenticatorAttachment,
+    key_type: KeyType,
+    client_extension_results: ExtensionResults,
+    authenticator_attachment: AuthenticatorAttachment,
 }
 
 // Also not yet
@@ -178,16 +183,348 @@ pub struct ExtensionResults {}
 #[serde_as]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RegistrationResponseInner {
+struct RegistrationResponseInner {
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub attestation_object: Vec<u8>,
+    attestation_object: Vec<u8>,
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
     #[serde(rename = "clientDataJSON")]
-    pub client_data_json: Vec<u8>,
-    pub transports: Vec<Transport>,
-    pub public_key_algorithm: Algorithm,
+    client_data_json: Vec<u8>,
+    transports: Vec<Transport>,
+    public_key_algorithm: Algorithm,
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub public_key: Vec<u8>,
+    public_key: Vec<u8>,
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
-    pub authenticator_data: Vec<u8>,
+    authenticator_data: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RegistrationState {
+    challenge: Vec<u8>,
+    rp_id: String,
+    origin: String,
+    user_verification: Requirement,
+    resident_key: Requirement,
+}
+
+#[derive(Debug)]
+pub struct Credential {
+    pub credential_id: Vec<u8>,
+    pub public_key: coset::CoseKey,
+    pub sign_count: u32,
+    pub user_present: bool,
+    pub user_verified: bool,
+    pub backup_state: bool,
+    pub backup_eligible: bool,
+}
+
+#[derive(Debug, Error)]
+pub enum RegistrationError {
+    #[error("Invalid clientDataJSON: {0}")]
+    InvalidClientDataJson(serde_json::Error),
+    #[error("Invalid clientDataJSON type: {0}")]
+    InvalidClientDataJsonType(String),
+    #[error("Challenge mismatch, expected: {0:?}, got {1:?}")]
+    ChallengeMismatch(Vec<u8>, Vec<u8>),
+    #[error("Origin mismatch, expected: {0}, got {1}")]
+    OriginMismatch(String, String),
+    // I am not bothering with that cursed error handling
+    #[error("Invalid attestationObject: {0}")]
+    InvalidAttestationObject(String),
+    #[error("RP id hash mismatch, expected {0:?}, got {1:?}")]
+    RpIdHashMismatch([u8; 32], [u8; 32]),
+    #[error("attestationObject authData is too short")]
+    AttestationObjectAuthDataTooShort,
+    #[error("User not present")]
+    UserNotPresent,
+    #[error("User verification required")]
+    UserVerificationRequired,
+    #[error("attestationObject authData invalid CBOR")]
+    InvalidAttestationObjectAuthDataCbor,
+    #[error("attestationObject authData is too long")]
+    AttestationObjectAuthDataTooLong,
+    #[error("attestationObject authData credential data is missing")]
+    AttestationObjectAuthDataCredentialDataMissing,
+    #[error("Unexpected attestation")]
+    UnexpectedAttestation,
+    #[error("Invalid credential id")]
+    InvalidCredentialId,
+    #[error("Unsupported attestation format: {0}")]
+    UnsupportedAttestationFmt(String),
+    #[error("Invalid credential public key: {0}")]
+    InvalidCredentialPublicKey(coset::CoseError),
+}
+
+pub fn start_registration(
+    rp: Rp,
+    origin: String,
+    user: User,
+) -> (RegistrationRequest, RegistrationState) {
+    let mut challenge = vec![0u8; 32];
+    rand::rng().fill_bytes(&mut challenge);
+
+    let state = RegistrationState {
+        challenge: challenge.clone(),
+        rp_id: rp.id.clone(),
+        origin,
+        user_verification: Requirement::Required,
+        resident_key: Requirement::Required,
+    };
+
+    let request = RegistrationRequest {
+        challenge,
+        rp,
+        user,
+        timeout: 60000,
+        attestation: Attestation::None,
+        hints: Vec::new(),
+        pub_key_cred_params: vec![
+            PubKeyCredParam {
+                key_type: KeyType::PublicKey,
+                alg: Algorithm::EdDSA,
+            },
+            PubKeyCredParam {
+                key_type: KeyType::PublicKey,
+                alg: Algorithm::ES256,
+            },
+            PubKeyCredParam {
+                key_type: KeyType::PublicKey,
+                alg: Algorithm::RS256,
+            },
+        ],
+        exclude_credentials: Vec::new(),
+        authenticator_selection: AuthenticatorSelection {
+            authenticator_attachment: None,
+            resident_key: Requirement::Required,
+            user_verification: Requirement::Required,
+        },
+        extensions: Vec::new(),
+    };
+
+    (request, state)
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClientData {
+    #[serde(rename = "type")]
+    ty: String,
+    #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
+    challenge: Vec<u8>,
+    origin: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttestationObject {
+    fmt: String,
+    auth_data: Vec<u8>,
+    att_stmt: ciborium::Value,
+}
+
+pub fn verify_registration(
+    response: &RegistrationResponse,
+    state: &RegistrationState,
+) -> Result<Credential, RegistrationError> {
+    let client_data: ClientData = serde_json::from_slice(&response.response.client_data_json)
+        .map_err(RegistrationError::InvalidClientDataJson)?;
+
+    if client_data.ty != "webauthn.create" {
+        return Err(RegistrationError::InvalidClientDataJsonType(client_data.ty));
+    }
+
+    if client_data.challenge != state.challenge {
+        return Err(RegistrationError::ChallengeMismatch(
+            client_data.challenge,
+            state.challenge.clone(),
+        ));
+    }
+
+    if client_data.origin != state.origin {
+        return Err(RegistrationError::OriginMismatch(
+            client_data.origin,
+            state.origin.clone(),
+        ));
+    }
+
+    let attestation: AttestationObject =
+        ciborium::de::from_reader(response.response.attestation_object.as_slice())
+            .map_err(|err| RegistrationError::InvalidAttestationObject(err.to_string()))?;
+
+    let auth_data = decode_auth_data(&attestation.auth_data)?;
+
+    let expected_rp_id_hash = sha256(state.rp_id.as_bytes());
+
+    if auth_data.rp_id_hash != expected_rp_id_hash {
+        return Err(RegistrationError::RpIdHashMismatch(
+            expected_rp_id_hash,
+            auth_data.rp_id_hash,
+        ));
+    }
+
+    if !auth_data.flags.user_present {
+        return Err(RegistrationError::UserNotPresent);
+    }
+
+    if state.user_verification == Requirement::Required && !auth_data.flags.user_verified {
+        return Err(RegistrationError::UserVerificationRequired);
+    }
+
+    let credential = auth_data
+        .attested_credential
+        .ok_or(RegistrationError::AttestationObjectAuthDataCredentialDataMissing)?;
+
+    if credential.credential_id.is_empty() {
+        return Err(RegistrationError::InvalidCredentialId);
+    }
+
+    if attestation.fmt != "none" {
+        return Err(RegistrationError::UnsupportedAttestationFmt(
+            attestation.fmt,
+        ));
+    }
+
+    if !matches!(attestation.att_stmt, ciborium::Value::Map(map) if map.is_empty()) {
+        return Err(RegistrationError::UnexpectedAttestation);
+    }
+
+    Ok(Credential {
+        credential_id: credential.credential_id,
+        public_key: credential.credential_public_key,
+        sign_count: auth_data.sign_count,
+        user_present: auth_data.flags.user_present,
+        user_verified: auth_data.flags.user_verified,
+        backup_state: auth_data.flags.backup_state,
+        backup_eligible: auth_data.flags.backup_eligible,
+    })
+}
+
+#[derive(Debug)]
+pub struct AuthenticatorData {
+    rp_id_hash: [u8; 32],
+    flags: AuthenticatorFlags,
+    sign_count: u32,
+    attested_credential: Option<AttestedCredential>,
+    extensions: Option<ciborium::Value>,
+}
+
+#[derive(Debug)]
+struct AuthenticatorFlags {
+    user_present: bool,
+    user_verified: bool,
+    backup_state: bool,
+    backup_eligible: bool,
+    attested_credential_data: bool,
+    extension_data: bool,
+}
+
+impl From<u8> for AuthenticatorFlags {
+    fn from(flags: u8) -> Self {
+        Self {
+            user_present: flags & (1 << 0) != 0,
+            user_verified: flags & (1 << 2) != 0,
+            backup_state: flags & (1 << 3) != 0,
+            backup_eligible: flags & (1 << 4) != 0,
+            attested_credential_data: flags & (1 << 6) != 0,
+            extension_data: flags & (1 << 7) != 0,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AttestedCredential {
+    aaguid: [u8; 16],
+    credential_id: Vec<u8>,
+    credential_public_key: coset::CoseKey,
+}
+
+pub fn decode_auth_data(bytes: &[u8]) -> Result<AuthenticatorData, RegistrationError> {
+    if bytes.len() < 37 {
+        return Err(RegistrationError::AttestationObjectAuthDataTooShort);
+    }
+
+    let mut buf = bytes;
+    let mut rp_id_hash = [0u8; 32];
+
+    buf.copy_to_slice(&mut rp_id_hash);
+
+    let flags: AuthenticatorFlags = buf.get_u8().into();
+    let sign_count = buf.get_u32();
+
+    let attested_credential = if flags.attested_credential_data {
+        if buf.remaining() < 18 {
+            return Err(RegistrationError::AttestationObjectAuthDataTooShort);
+        }
+
+        let mut aaguid = [0u8; 16];
+        buf.copy_to_slice(&mut aaguid);
+
+        let credential_id_len = buf.get_u16() as usize;
+
+        if buf.remaining() < credential_id_len {
+            return Err(RegistrationError::AttestationObjectAuthDataTooShort);
+        }
+
+        let credential_id = buf.copy_to_bytes(credential_id_len).to_vec();
+
+        if buf.remaining() == 0 {
+            return Err(RegistrationError::AttestationObjectAuthDataTooShort);
+        }
+
+        let mut cursor = std::io::Cursor::new(buf.chunk());
+
+        let credential_public_key: ciborium::Value = ciborium::from_reader(&mut cursor)
+            .map_err(|_| RegistrationError::InvalidAttestationObjectAuthDataCbor)?;
+
+        let key_len = cursor.position() as usize;
+        buf.advance(key_len);
+
+        // TODO: check if it actually matches what was requested.
+        let credential_public_key = coset::CoseKey::from_cbor_value(credential_public_key)
+            .map_err(RegistrationError::InvalidCredentialPublicKey)?;
+
+        Some(AttestedCredential {
+            aaguid,
+            credential_id,
+            credential_public_key,
+        })
+    } else {
+        None
+    };
+
+    let extensions = if flags.extension_data {
+        if buf.remaining() == 0 {
+            return Err(RegistrationError::AttestationObjectAuthDataTooShort);
+        }
+
+        let mut cursor = std::io::Cursor::new(buf.chunk());
+
+        let extensions: ciborium::Value = ciborium::from_reader(&mut cursor)
+            .map_err(|_| RegistrationError::InvalidAttestationObjectAuthDataCbor)?;
+
+        let extension_len = cursor.position() as usize;
+        buf.advance(extension_len);
+
+        Some(extensions)
+    } else {
+        None
+    };
+
+    if buf.has_remaining() {
+        return Err(RegistrationError::AttestationObjectAuthDataTooLong);
+    }
+
+    Ok(AuthenticatorData {
+        rp_id_hash,
+        flags,
+        sign_count,
+        attested_credential,
+        extensions,
+    })
+}
+
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(bytes);
+    hasher.finalize().into()
 }
