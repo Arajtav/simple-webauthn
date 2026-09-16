@@ -3,24 +3,50 @@ pub mod authentication;
 pub mod registration;
 mod shared;
 
-use coset::CoseKey;
-use serde::Serialize;
+use coset::{CborSerializable, CoseKey};
+use serde::{Deserialize, Serialize};
 use serde_with::{
     base64::{Base64, UrlSafe},
     formats::Unpadded,
     serde_as,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Credential {
-    pub credential_id: Vec<u8>,
-    pub public_key: CoseKey,
-    pub sign_count: u32,
-    pub user_present: bool,
-    pub user_verified: bool,
-    pub backup_state: bool,
-    pub backup_eligible: bool,
+    credential_id: Vec<u8>,
+    #[serde(
+        serialize_with = "serialize_cose_key",
+        deserialize_with = "deserialize_cose_key"
+    )]
+    public_key: CoseKey,
+    sign_count: u32,
+    user_present: bool,
+    user_verified: bool,
+    backup_state: bool,
+    backup_eligible: bool,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Base64UrlBytes(#[serde_as(as = "Base64<UrlSafe, Unpadded>")] Vec<u8>);
+
+fn serialize_cose_key<S>(key: &CoseKey, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let bytes = key.clone().to_vec().map_err(serde::ser::Error::custom)?;
+
+    Base64UrlBytes(bytes).serialize(serializer)
+}
+
+fn deserialize_cose_key<'de, D>(deserializer: D) -> Result<CoseKey, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Base64UrlBytes(bytes) = Base64UrlBytes::deserialize(deserializer)?;
+
+    CoseKey::from_slice(&bytes).map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug)]
