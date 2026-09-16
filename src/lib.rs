@@ -35,7 +35,7 @@ impl Credential {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Base64UrlBytes(#[serde_as(as = "Base64<UrlSafe, Unpadded>")] Vec<u8>);
 
 fn serialize_cose_key<S>(key: &CoseKey, serializer: S) -> Result<S::Ok, S::Error>
@@ -56,7 +56,7 @@ where
     CoseKey::from_slice(&bytes).map_err(serde::de::Error::custom)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Authentication {
     pub credential_id: Vec<u8>,
     pub sign_count: u32,
@@ -64,7 +64,7 @@ pub struct Authentication {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]

@@ -25,7 +25,7 @@ pub struct AuthenticationRequest {
     hints: Vec<Hint>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AuthenticationState {
     challenge: [u8; 32],
     rp_id: String,
@@ -99,7 +99,7 @@ pub fn start_authentication(
     (request, state)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SimpleCredential {
     key: CoseKey,
     id: Vec<u8>,

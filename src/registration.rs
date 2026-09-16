@@ -32,7 +32,7 @@ pub struct RegistrationRequest {
     extensions: Vec<Extension>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Rp {
     pub name: String,
     pub id: String,
@@ -122,7 +122,7 @@ pub struct RegistrationResponseInner {
     authenticator_data: Vec<u8>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RegistrationState {
     challenge: [u8; 32],
     rp_id: String,
