@@ -14,7 +14,7 @@ use serde_with::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Credential {
-    credential_id: Vec<u8>,
+    id: Vec<u8>,
     #[serde(
         serialize_with = "serialize_cose_key",
         deserialize_with = "deserialize_cose_key"
@@ -25,6 +25,13 @@ pub struct Credential {
     user_verified: bool,
     backup_state: bool,
     backup_eligible: bool,
+}
+
+impl Credential {
+    #[must_use]
+    pub fn id(&self) -> &[u8] {
+        &self.id
+    }
 }
 
 #[serde_as]

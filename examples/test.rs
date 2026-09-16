@@ -57,5 +57,8 @@ fn main() {
 
     let response = read_json(&mut stdin);
 
-    println!("{:#?}", verify_authentication(response, state, &[cred]));
+    println!(
+        "{:#?}",
+        verify_authentication(response, state, &[cred.into()])
+    );
 }

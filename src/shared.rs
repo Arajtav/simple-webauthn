@@ -53,6 +53,12 @@ pub struct Response<R> {
     pub authenticator_attachment: AuthenticatorAttachment,
 }
 
+impl<R> Response<R> {
+    pub fn credential_id(&self) -> &[u8] {
+        &self.id
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthenticatorAttachment {
@@ -77,7 +83,7 @@ pub struct ClientData {
 
 #[serde_as]
 #[derive(Debug, Serialize)]
-pub struct SimpleCredential {
+pub struct CredentialInfo {
     #[serde_as(as = "Base64<UrlSafe, Unpadded>")]
     pub id: Vec<u8>,
     #[serde(rename = "type")]

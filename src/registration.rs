@@ -10,7 +10,7 @@ use crate::{
     Credential, Requirement, User,
     auth_data::{AuthDataError, decode_auth_data},
     shared::{
-        AuthenticatorSelection, ClientData, Hint, KeyType, Response, SimpleCredential, Transport,
+        AuthenticatorSelection, ClientData, CredentialInfo, Hint, KeyType, Response, Transport,
         generate_challenge, sha256,
     },
 };
@@ -27,7 +27,7 @@ pub struct RegistrationRequest {
     attestation: Attestation,
     hints: Vec<Hint>,
     pub_key_cred_params: Vec<PubKeyCredParam>,
-    exclude_credentials: Vec<SimpleCredential>,
+    exclude_credentials: Vec<CredentialInfo>,
     authenticator_selection: AuthenticatorSelection,
     extensions: Vec<Extension>,
 }
@@ -287,7 +287,7 @@ pub fn verify_registration(
     }
 
     Ok(Credential {
-        credential_id: credential.credential_id,
+        id: credential.credential_id,
         public_key: credential.credential_public_key,
         sign_count: auth_data.sign_count,
         user_present: auth_data.flags.user_present(),

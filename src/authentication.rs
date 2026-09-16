@@ -1,7 +1,7 @@
 use crate::{
     Authentication, Credential, Requirement,
     auth_data::{AuthDataError, decode_auth_data},
-    shared::{ClientData, Hint, Response, SimpleCredential, generate_challenge, sha256},
+    shared::{ClientData, CredentialInfo, Hint, Response, generate_challenge, sha256},
 };
 use coset::{CoseKey, RegisteredLabel, RegisteredLabelWithPrivate};
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub struct AuthenticationRequest {
     challenge: [u8; 32],
     timeout: i32,
     rp_id: String,
-    allow_credentials: Vec<SimpleCredential>,
+    allow_credentials: Vec<CredentialInfo>,
     user_verification: Requirement,
     hints: Vec<Hint>,
 }
@@ -99,10 +99,25 @@ pub fn start_authentication(
     (request, state)
 }
 
+#[derive(Debug)]
+pub struct SimpleCredential {
+    key: CoseKey,
+    id: Vec<u8>,
+}
+
+impl From<Credential> for SimpleCredential {
+    fn from(cred: Credential) -> Self {
+        Self {
+            key: cred.public_key,
+            id: cred.id,
+        }
+    }
+}
+
 pub fn verify_authentication(
     response: AuthenticationResponse,
     state: AuthenticationState,
-    credentials: &[Credential],
+    credentials: &[SimpleCredential],
 ) -> Result<Authentication, AuthenticationError> {
     let client_data: ClientData = serde_json::from_slice(&response.response.client_data_json)
         .map_err(AuthenticationError::InvalidClientDataJson)?;
@@ -150,15 +165,12 @@ pub fn verify_authentication(
     verification_data.extend_from_slice(&response.response.authenticator_data);
     verification_data.extend_from_slice(&sha256(&response.response.client_data_json));
 
-    let Some(credential) = credentials
-        .iter()
-        .find(|cred| cred.credential_id == response.id)
-    else {
+    let Some(credential) = credentials.iter().find(|cred| cred.id == response.id) else {
         return Err(AuthenticationError::NoKeyFound);
     };
 
     if !verify_cose_signature(
-        &credential.public_key,
+        &credential.key,
         &response.response.signature,
         &verification_data,
     ) {
