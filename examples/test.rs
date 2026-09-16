@@ -1,8 +1,9 @@
+/// This example is actually terrible, it's just a thing I used to test the implementation by copying and pasting generated json.
 use std::io::{self, BufRead};
 
-use passkeys::*;
 use serde::de::DeserializeOwned;
 use serde_json;
+use simple_webauthn::{registration::Rp, *};
 
 fn read_json<T: DeserializeOwned>(stdin: &mut impl BufRead) -> T {
     let mut input = String::new();

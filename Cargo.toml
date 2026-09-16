@@ -1,5 +1,5 @@
 [package]
-name = "passkeys"
+name = "simple-webauthn"
 edition = "2024"
 publish = false
 
