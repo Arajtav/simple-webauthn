@@ -49,8 +49,9 @@ pub struct Response<R> {
     pub response: R,
     #[serde(rename = "type")]
     pub key_type: KeyType,
+    #[serde(default)]
     pub client_extension_results: ExtensionResults,
-    pub authenticator_attachment: AuthenticatorAttachment,
+    pub authenticator_attachment: Option<AuthenticatorAttachment>,
 }
 
 impl<R> Response<R> {
@@ -67,7 +68,7 @@ pub enum AuthenticatorAttachment {
 }
 
 // Also not yet
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct ExtensionResults {}
 
 #[serde_as]
